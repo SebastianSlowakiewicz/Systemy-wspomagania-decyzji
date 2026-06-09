@@ -15,7 +15,7 @@ TYPY_ANALIZY = {
     'alpha': 'alpha'
 }
 
-WYBRANA_METODA = TYPY_ANALIZY['heurystyka'] 
+WYBRANA_METODA = TYPY_ANALIZY['alpha'] 
 
 
 try:
@@ -96,7 +96,7 @@ def generuj_graf_heurystyczny(mapa_aktywnosci, mapa_przejsc, sukcesja_bezposredn
     G.graph_attr['rankdir'] = 'LR' 
     G.node_attr['shape'] = 'box'   
     G.node_attr['style'] = 'rounded,filled'
-    G.node_attr['fillcolor'] = '#FFFFCC' 
+    G.node_attr['fillcolor'] = "#9CFF8D" 
 
     min_akt = min(mapa_aktywnosci.values()) if mapa_aktywnosci else 1
     max_akt = max(mapa_aktywnosci.values()) if mapa_aktywnosci else 1
@@ -136,12 +136,12 @@ def generuj_graf_heurystyczny(mapa_aktywnosci, mapa_przejsc, sukcesja_bezposredn
     aktywnosci_koniec = przefiltrowane_akt - w_startowe
 
     if aktywnosci_start:
-        G.node("start", shape="circle", label="", fillcolor="#90EE90", width="0.3", fixedsize="true") 
+        G.node("start", shape="circle", label="", fillcolor="#41F241", width="0.3", fixedsize="true") 
         for akt in aktywnosci_start:
             G.edge("start", akt)
 
     if aktywnosci_koniec:
-        G.node("end", shape="doublecircle", label="", fillcolor="#FFB6C1", width="0.3", fixedsize="true") 
+        G.node("end", shape="doublecircle", label="", fillcolor="#F93B57", width="0.3", fixedsize="true") 
         for akt in aktywnosci_koniec:
             try:
                  G.node(akt) 
@@ -223,16 +223,16 @@ class MojGraf(graphviz.Digraph):
         return f"{prefiks}_{self._licznik_bramek}_{podpowiedz}"
 
     def dodaj_aktywnosc(self, nazwa, **kwargs):
-         domyslne = {'shape': 'box', 'style': 'rounded,filled', 'fillcolor': '#FFFFCC'}
+         domyslne = {'shape': 'box', 'style': 'rounded,filled', 'fillcolor': "#FFFF55"}
          domyslne.update(kwargs)
          super(MojGraf, self).node(nazwa, **domyslne)
 
     def dodaj_zdarzenie(self, nazwa, **kwargs):
         domyslne = {'shape': 'circle', 'label': '', 'width': '0.3', 'fixedsize': 'true'}
         if 'start' in nazwa.lower():
-             domyslne.update({'fillcolor': '#90EE90', 'style': 'filled'})
+             domyslne.update({'fillcolor': "#51E851", 'style': 'filled'})
         elif 'end' in nazwa.lower():
-             domyslne.update({'shape': 'doublecircle', 'fillcolor': '#FFB6C1', 'style': 'filled'})
+             domyslne.update({'shape': 'doublecircle', 'fillcolor': "#F44862", 'style': 'filled'})
         domyslne.update(kwargs)
         super(MojGraf, self).node(nazwa, **domyslne)
 
