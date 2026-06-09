@@ -1,359 +1,398 @@
 import graphviz
 from opyenxes.data_in.XUniversalParser import XUniversalParser
 from collections import defaultdict
+from functools import reduce
 
+LOG_FILE_PATH = 'Projekt_zaliczeniowy/repairexample.xes'
+OUTPUT_HEURISTIC_BASE = 'heuristic_net'
+OUTPUT_BPMN_BASE = 'alpha_bpmn_graph'
 
-SCIEZKA_LOGU = 'Projekt_zaliczeniowy/repairexample.xes'
-NAZWA_PLIKU_HEURYSTYKA = 'siec_heurystyczna'
-NAZWA_PLIKU_BPMN = 'graf_alpha_bpmn'
+ACTIVITY_FREQUENCY_THRESHOLD = 0
+TRANSITION_FREQUENCY_THRESHOLD = 0
 
-PROG_CZESTOSCI_AKTYWNOSCI = 0  
-PROG_CZESTOSCI_PRZEJSC = 0 
-
-TYPY_ANALIZY = {
-    'heurystyka': 'heuristic',
+MINER_TYPES = {
+    'heuristic': 'heuristic',
     'alpha': 'alpha'
 }
 
-WYBRANA_METODA = TYPY_ANALIZY['alpha'] 
-
+MINER_TYPE = MINER_TYPES['alpha']
 
 try:
-    with open(SCIEZKA_LOGU) as plik_z_logiem:
-        dane_logu = XUniversalParser().parse(plik_z_logiem)[0]
+    with open(LOG_FILE_PATH) as log_file:
+        log = XUniversalParser().parse(log_file)[0]
 except FileNotFoundError:
-    print(f"Błąd: Plik '{SCIEZKA_LOGU}' nie został znaleziony.")
+    print(f"Błąd: Plik logu '{LOG_FILE_PATH}' nie został znaleziony.")
     exit()
 except Exception as e:
     print(f"Błąd podczas parsowania pliku XES: {e}")
     exit()
 
-print(f"Log '{SCIEZKA_LOGU}' wczytany pomyślnie.")
+print(f"Log '{LOG_FILE_PATH}' wczytany pomyślnie.")
 
-
-dziennik_przeplywu = []
-for slad in dane_logu:
-    slad_procesu = []
-    for zdarzenie in slad:
+workflow_log = []
+for trace in log:
+    workflow_trace = []
+    for event in trace:
         try:
-            atrybuty = zdarzenie.get_attributes()
-            if 'Activity' in atrybuty:
-                 nazwa_aktywnosci = atrybuty['Activity'].get_value()
-                 slad_procesu.append(nazwa_aktywnosci)
-            elif 'concept:name' in atrybuty:
-                 nazwa_aktywnosci = atrybuty['concept:name'].get_value()
-                 slad_procesu.append(nazwa_aktywnosci)
+            attributes = event.get_attributes()
+            if 'Activity' in attributes:
+                event_name = attributes['Activity'].get_value()
+                workflow_trace.append(event_name)
+            elif 'concept:name' in attributes:
+                event_name = attributes['concept:name'].get_value()
+                workflow_trace.append(event_name)
+
         except Exception as e:
-            print(f"Ostrzeżenie: Problem w śladzie {dane_logu.index(slad)}: {e}")
+            print(f"Ostrzeżenie: Problem z odczytem atrybutu zdarzenia w śladzie {log.index(trace)}: {e}")
 
-    if slad_procesu: 
-        dziennik_przeplywu.append(slad_procesu)
+    if workflow_trace:
+        workflow_log.append(workflow_trace)
 
-if not dziennik_przeplywu:
-    print("Błąd: Nie udało się wyekstrahować śladów.")
+if not workflow_log:
+    print("Błąd: Nie udało się wyekstrahować żadnych śladów przepływu pracy z logu. Sprawdź strukturę pliku XES i nazwy atrybutów.")
     exit()
 
-print(f"Wyekstrahowano {len(dziennik_przeplywu)} śladów.")
+print(f"Wyekstrahowano {len(workflow_log)} śladów.")
 
+activity_counter = defaultdict(int)
+transition_counter = defaultdict(int)
+direct_succession_rel = defaultdict(set)
 
-licznik_aktywnosci = defaultdict(int)
-licznik_przejsc = defaultdict(int)
-relacje_sukcesji = defaultdict(set) 
+for w_trace in workflow_log:
+    if not w_trace: continue
 
-for slad in dziennik_przeplywu:
-    if not slad: continue 
+    for activity in w_trace:
+        activity_counter[activity] += 1
 
-    for akt in slad:
-        licznik_aktywnosci[akt] += 1
+    for i in range(len(w_trace) - 1):
+        source_activity = w_trace[i]
+        target_activity = w_trace[i+1]
+        transition = (source_activity, target_activity)
+        transition_counter[transition] += 1
+        direct_succession_rel[source_activity].add(target_activity)
 
-    for i in range(len(slad) - 1):
-        akt_zrodlowa = slad[i]
-        akt_docelowa = slad[i+1]
-        przejscie = (akt_zrodlowa, akt_docelowa)
-        licznik_przejsc[przejscie] += 1
-        relacje_sukcesji[akt_zrodlowa].add(akt_docelowa)
-
-wszystkie_aktywnosci = set(licznik_aktywnosci.keys())
-if not wszystkie_aktywnosci:
-    print("Błąd: Nie znaleziono żadnych aktywności.")
+all_activities = set(activity_counter.keys())
+if not all_activities:
+    print("Błąd: Nie znaleziono żadnych aktywności w logu.")
     exit()
 
-print(f"Znaleziono {len(wszystkie_aktywnosci)} unikalnych aktywności.")
+print(f"Znaleziono {len(all_activities)} unikalnych aktywności.")
 
-
-def generuj_graf_heurystyczny(mapa_aktywnosci, mapa_przejsc, sukcesja_bezposrednia, prog_akt, prog_przejsc, baza_pliku):
-    przefiltrowane_akt = {akt for akt, ile in mapa_aktywnosci.items() if ile >= prog_akt}
-    if not przefiltrowane_akt:
-        print(f"Ostrzeżenie: Brak aktywności spełniających próg {prog_akt}.")
+def generate_heuristic_graph(activity_counts, transition_counts, direct_succession, act_threshold, trans_threshold, filename_base):
+    filtered_activities = {act for act, count in activity_counts.items() if count >= act_threshold}
+    if not filtered_activities:
+        print(f"Ostrzeżenie: Żadne aktywności nie spełniają progu częstotliwości {act_threshold}. Graf będzie pusty.")
         return None
 
-    przefiltrowane_przejscia = {prz: ile for prz, ile in mapa_przejsc.items()
-                                if ile >= prog_przejsc and
-                                prz[0] in przefiltrowane_akt and
-                                prz[1] in przefiltrowane_akt}
+    filtered_transitions = {trans: count for trans, count in transition_counts.items()
+                            if count >= trans_threshold and
+                            trans[0] in filtered_activities and
+                            trans[1] in filtered_activities}
+
+    if not filtered_transitions and len(filtered_activities) > 1 :
+        print(f"Ostrzeżenie: Żadne przejścia nie spełniają progu częstotliwości {trans_threshold} (lub łączą odfiltrowane aktywności).")
 
     G = graphviz.Digraph(comment='Heuristic Net')
-    G.graph_attr['rankdir'] = 'LR' 
-    G.node_attr['shape'] = 'box'   
+    G.graph_attr['rankdir'] = 'LR'
+    G.node_attr['shape'] = 'box'
     G.node_attr['style'] = 'rounded,filled'
-    G.node_attr['fillcolor'] = "#9CFF8D" 
+    G.node_attr['fillcolor'] = '#FFFFCC'
 
-    min_akt = min(mapa_aktywnosci.values()) if mapa_aktywnosci else 1
-    max_akt = max(mapa_aktywnosci.values()) if mapa_aktywnosci else 1
-    min_prz = min(przefiltrowane_przejscia.values()) if przefiltrowane_przejscia else 1
-    max_prz = max(przefiltrowane_przejscia.values()) if przefiltrowane_przejscia else 1
+    if activity_counts:
+        min_act_freq = min(activity_counts.values()) if activity_counts else 1
+        max_act_freq = max(activity_counts.values()) if activity_counts else 1
+    else:
+        min_act_freq, max_act_freq = 1, 1
 
-    for akt in przefiltrowane_akt:
-        ile = mapa_aktywnosci[akt]
-        etykieta = f"{akt}\n({ile})"
+    if filtered_transitions:
+        min_trans_freq = min(filtered_transitions.values()) if filtered_transitions else 1
+        max_trans_freq = max(filtered_transitions.values()) if filtered_transitions else 1
+    else:
+        min_trans_freq, max_trans_freq = 1, 1
 
-        odcien = 0
-        if max_akt > min_akt:
-             norm_czestosc = (ile - min_akt) / (max_akt - min_akt)
-             odcien = 99 - int(norm_czestosc * 99) 
-        else: 
-             odcien = 50 
+    for activity in filtered_activities:
+        count = activity_counts[activity]
+        label = f"{activity}\n({count})"
 
-        hex_odcien = hex(odcien)[2:].zfill(2)
-        kolor_wezla = f"#FF9933{hex_odcien}" 
+        color_intensity = 0
+        if max_act_freq > min_act_freq:
+            normalized_freq = (count - min_act_freq) / (max_act_freq - min_act_freq)
+            color_intensity = 99 - int(normalized_freq * 99)
+        else:
+            color_intensity = 50
 
-        G.node(akt, label=etykieta, fillcolor=kolor_wezla)
+        hex_intensity = hex(color_intensity)[2:].zfill(2)
+        node_color = f"#FF9933{hex_intensity}"
 
-    for (zrodlo, cel), ile in przefiltrowane_przejscia.items():
-        grubosc = 1.0
-        if max_prz > min_prz:
-             norm_grubosc = (ile - min_prz) / (max_prz - min_prz)
-             grubosc = 1 + norm_grubosc * 5
-        elif ile > 0: 
-            grubosc = 2.0 
+        G.node(activity, label=label, fillcolor=node_color)
+    for (source, target), count in filtered_transitions.items():
+        penwidth = 1.0
+        if max_trans_freq > min_trans_freq:
+            normalized_penwidth = (count - min_trans_freq) / (max_trans_freq - min_trans_freq)
+            penwidth = 1 + normalized_penwidth * 5
+        elif count > 0:
+            penwidth = 2.0
 
-        G.edge(zrodlo, cel, label=str(ile), penwidth=str(grubosc))
+        G.edge(source, target, label=str(count), penwidth=str(penwidth)) 
 
-    w_startowe = {prz[0] for prz in przefiltrowane_przejscia}
-    w_koncowe = {prz[1] for prz in przefiltrowane_przejscia}
+    source_nodes_in_filtered_transitions = {trans[0] for trans in filtered_transitions}
+    target_nodes_in_filtered_transitions = {trans[1] for trans in filtered_transitions}
 
-    aktywnosci_start = przefiltrowane_akt - w_koncowe
-    aktywnosci_koniec = przefiltrowane_akt - w_startowe
+    start_activities = filtered_activities - target_nodes_in_filtered_transitions
+    end_activities = filtered_activities - source_nodes_in_filtered_transitions
 
-    if aktywnosci_start:
-        G.node("start", shape="circle", label="", fillcolor="#41F241", width="0.3", fixedsize="true") 
-        for akt in aktywnosci_start:
-            G.edge("start", akt)
+    if start_activities:
+        G.node("start", shape="circle", label="", fillcolor="#90EE90", width="0.3", fixedsize="true")
+        for activity in start_activities:
+            G.edge("start", activity)
 
-    if aktywnosci_koniec:
-        G.node("end", shape="doublecircle", label="", fillcolor="#F93B57", width="0.3", fixedsize="true") 
-        for akt in aktywnosci_koniec:
+    if end_activities:
+        G.node("end", shape="doublecircle", label="", fillcolor="#FFB6C1", width="0.3", fixedsize="true")
+        for activity in end_activities:
             try:
-                 G.node(akt) 
-                 G.edge(akt, "end")
-            except KeyError: 
-                 pass
+                G.node(activity)
+                G.edge(activity, "end")
+            except KeyError:
+                print(f"Ostrzeżenie: Aktywność końcowa {activity} nie była w filtered_activities, ale została zidentyfikowana jako końcowa. Pomijanie krawędzi do 'end'.")
 
     try:
-        pl_dot = f"{baza_pliku}_filtrowany_akt{prog_akt}_trans{prog_przejsc}.gv"
-        pl_png = f"{baza_pliku}_filtrowany_akt{prog_akt}_trans{prog_przejsc}.png"
-        G.render(pl_dot, view=False, format='png', outfile=pl_png)
-        print(f"Graf heurystyczny zapisany jako '{pl_png}'")
-        return G 
-    except Exception as e:
-        print(f"Błąd renderowania Graphviz: {e}")
-        return None
-
-
-def oblicz_relacje_alpha(dziennik, zbior_aktywnosci):
-    sukcesja = defaultdict(set) 
-    macierz_sladu = defaultdict(lambda: defaultdict(str)) 
-
-    for slad in dziennik:
-        for i in range(len(slad) - 1):
-            sukcesja[slad[i]].add(slad[i+1])
-
-    przyczynowosc = defaultdict(set) 
-    rownoleglosc = set()           
-
-    lista_akt = sorted(list(zbior_aktywnosci)) 
-    for akt_a in lista_akt:
-        for akt_b in lista_akt:
-            a_po_b = akt_b in sukcesja.get(akt_a, set())
-            b_po_a = akt_a in sukcesja.get(akt_b, set())
-
-            if a_po_b and not b_po_a:
-                macierz_sladu[akt_a][akt_b] = "->"
-                przyczynowosc[akt_a].add(akt_b)
-            elif not a_po_b and b_po_a:
-                macierz_sladu[akt_a][akt_b] = "<-"
-            elif a_po_b and b_po_a:
-                macierz_sladu[akt_a][akt_b] = "||"
-                if (akt_a, akt_b) not in rownoleglosc and (akt_b, akt_a) not in rownoleglosc:
-                     rownoleglosc.add((akt_a, akt_b))
-                     rownoleglosc.add((akt_b, akt_a)) 
-            else: 
-                macierz_sladu[akt_a][akt_b] = "#"
-
-    start_formalny = zbior_aktywnosci.copy()
-    koniec_formalny = zbior_aktywnosci.copy()
-    for akt_a in zbior_aktywnosci:
-        for akt_b in zbior_aktywnosci:
-             if akt_a == akt_b: continue
-             if macierz_sladu[akt_b][akt_a] in ["->", "||"]:
-                 start_formalny.discard(akt_a)
-             if macierz_sladu[akt_a][akt_b] in ["->", "||"]:
-                 koniec_formalny.discard(akt_a)
-
-    odwrotna_przyczynowosc = defaultdict(set)
-    for zrodlo, cele in przyczynowosc.items():
-        for cel in cele:
-            odwrotna_przyczynowosc[cel].add(zrodlo)
-
-    print("Relacje Alpha obliczone.")
-    return przyczynowosc, rownoleglosc, start_formalny, koniec_formalny, odwrotna_przyczynowosc
-
-class MojGraf(graphviz.Digraph):
-    def __init__(self, *args, **kwargs):
-        super(MojGraf, self).__init__(*args, **kwargs)
-        self.graph_attr['rankdir'] = 'LR'
-        self.node_attr['shape'] = 'box' 
-        self.node_attr['style'] = 'rounded'
-        self.graph_attr['nodesep'] = '0.6' 
-        self.edge_attr.update(penwidth='1.5') 
-        self._licznik_bramek = 0 
-
-    def _unikalna_nazwa_bramki(self, prefiks, podpowiedz=""):
-        self._licznik_bramek += 1
-        return f"{prefiks}_{self._licznik_bramek}_{podpowiedz}"
-
-    def dodaj_aktywnosc(self, nazwa, **kwargs):
-         domyslne = {'shape': 'box', 'style': 'rounded,filled', 'fillcolor': "#FFFF55"}
-         domyslne.update(kwargs)
-         super(MojGraf, self).node(nazwa, **domyslne)
-
-    def dodaj_zdarzenie(self, nazwa, **kwargs):
-        domyslne = {'shape': 'circle', 'label': '', 'width': '0.3', 'fixedsize': 'true'}
-        if 'start' in nazwa.lower():
-             domyslne.update({'fillcolor': "#51E851", 'style': 'filled'})
-        elif 'end' in nazwa.lower():
-             domyslne.update({'shape': 'doublecircle', 'fillcolor': "#F44862", 'style': 'filled'})
-        domyslne.update(kwargs)
-        super(MojGraf, self).node(nazwa, **domyslne)
-
-    def dodaj_bramke(self, nazwa, etykieta, **kwargs):
-         domyslne = {
-             'shape': 'diamond', 'width': '.5', 'height': '.5', 
-             'fixedsize': 'true', 'fontsize': '20', 'label': etykieta,
-             'style': 'filled', 'fillcolor': '#E0E0E0' 
-             }
-         domyslne.update(kwargs)
-         super(MojGraf, self).node(nazwa, **domyslne)
-
-    def dodaj_bramke_rozdzielajaca(self, zrodlo, cele, typ_bramki, rel_rownolegle):
-        podpowiedz = f"{zrodlo}->{'_'.join(sorted(list(cele)))}" 
-        jest_rownolegly_split = False
-
-        if len(cele) > 1:
-             lista_celow = sorted(list(cele))
-             jest_rownolegly_split = any((t1, t2) in rel_rownolegle for i, t1 in enumerate(lista_celow) for t2 in lista_celow[i+1:])
-
-        nazwa_bramki = self._unikalna_nazwa_bramki(f"{typ_bramki}s", podpowiedz)
-
-        if typ_bramki == "AND" or (typ_bramki == "AUTO" and jest_rownolegly_split):
-            self.dodaj_bramke(nazwa_bramki, '+')
-        else: 
-            self.dodaj_bramke(nazwa_bramki, '×')
-
-        super(MojGraf, self).edge(zrodlo, nazwa_bramki)
-        for cel in cele:
-            super(MojGraf, self).edge(nazwa_bramki, cel)
-        return nazwa_bramki 
-
-    def dodaj_bramke_laczaca(self, zrodla, cel, typ_bramki, rel_rownolegle):
-        podpowiedz = f"{'_'.join(sorted(list(zrodla)))}->{cel}"
-        jest_rownolegly_merge = False
-        if len(zrodla) > 1:
-            lista_zrodel = sorted(list(zrodla))
-            jest_rownolegly_merge = any((s1, s2) in rel_rownolegle for i, s1 in enumerate(lista_zrodel) for s2 in lista_zrodel[i+1:])
-
-        nazwa_bramki = self._unikalna_nazwa_bramki(f"{typ_bramki}m", podpowiedz)
-
-        if typ_bramki == "AND" or (typ_bramki == "AUTO" and jest_rownolegly_merge):
-            self.dodaj_bramke(nazwa_bramki, '+')
-        else: 
-            self.dodaj_bramke(nazwa_bramki, '×')
-
-        super(MojGraf, self).edge(nazwa_bramki, cel)
-        for zrodlo in zrodla:
-            super(MojGraf, self).edge(zrodlo, nazwa_bramki)
-        return nazwa_bramki
-
-def generuj_graf_bpmn(przyczynowosc, rownoleglosc, start_events, end_events, inv_causality, zbior_aktywnosci, baza_pliku):
-    G = MojGraf(comment='Alpha Miner BPMN')
-    krawedzie_do_dodania = set() 
-
-    for akt in zbior_aktywnosci:
-        G.dodaj_aktywnosc(akt)
-
-    for zrodlo, cele in przyczynowosc.items():
-        if len(cele) > 1:
-            G.dodaj_bramke_rozdzielajaca(zrodlo, cele, "AUTO", rownoleglosc)
-        elif len(cele) == 1:
-            cel = list(cele)[0]
-            krawedzie_do_dodania.add((zrodlo, cel))
-
-    for cel, zrodla in inv_causality.items():
-        if len(zrodla) > 1:
-            G.dodaj_bramke_laczaca(zrodla, cel, "AUTO", rownoleglosc)
-            for zrodlo in zrodla:
-                 krawedzie_do_dodania.discard((zrodlo, cel))
-        
-    for zrodlo, cel in krawedzie_do_dodania:
-             G.edge(zrodlo, cel)
-
-    G.dodaj_zdarzenie("start")
-    if len(start_events) > 1:
-        G.dodaj_bramke_rozdzielajaca("start", start_events, "AUTO", rownoleglosc)
-    elif len(start_events) == 1:
-        G.edge("start", list(start_events)[0])
-    
-    G.dodaj_zdarzenie("end")
-    if len(end_events) > 1:
-        G.dodaj_bramke_laczaca(end_events, "end", "AUTO", rownoleglosc)
-    elif len(end_events) == 1:
-        G.edge(list(end_events)[0], "end")
-    
-    try:
-        pl_dot = f"{baza_pliku}.gv"
-        pl_png = f"{baza_pliku}.png"
-        G.render(pl_dot, view=False, format='png', outfile=pl_png)
-        print(f"Graf BPMN (Alpha) zapisany jako '{pl_png}'")
+        output_filename_dot = f"{filename_base}_filtered_act{act_threshold}_trans{trans_threshold}.gv"
+        output_filename_png = f"{filename_base}_filtered_act{act_threshold}_trans{trans_threshold}.png"
+        G.render(output_filename_dot, view=False, format='png', outfile=output_filename_png)
+        print(f"Graf heurystyczny zapisany jako '{output_filename_png}' i '{output_filename_dot}'")
         return G
     except Exception as e:
-        print(f"Błąd renderowania BPMN: {e}")
+        print(f"Błąd podczas renderowania grafu Graphviz: {e}")
+        print("Upewnij się, że Graphviz jest zainstalowany i dostępny w ścieżce systemowej (PATH).")
         return None
 
+def calculate_alpha_relations(workflow_log, all_activities):
+    direct_succession = defaultdict(set)
+    footprint_matrix = defaultdict(lambda: defaultdict(str))
+
+    for trace in workflow_log:
+        for i in range(len(trace) - 1):
+            direct_succession[trace[i]].add(trace[i+1])
+
+    causality = defaultdict(set)
+    parallel = set()
+
+    activities_list = sorted(list(all_activities))
+    for act_a in activities_list:
+        for act_b in activities_list:
+            a_follows_b = act_b in direct_succession.get(act_a, set())
+            b_follows_a = act_a in direct_succession.get(act_b, set())
+
+            if a_follows_b and not b_follows_a:
+                footprint_matrix[act_a][act_b] = "->"
+                causality[act_a].add(act_b)
+            elif not a_follows_b and b_follows_a:
+                footprint_matrix[act_a][act_b] = "<-"
+            elif a_follows_b and b_follows_a:
+                footprint_matrix[act_a][act_b] = "||"
+                if (act_a, act_b) not in parallel and (act_b, act_a) not in parallel:
+                    parallel.add((act_a, act_b))
+                    parallel.add((act_b, act_a))
+            else:
+                footprint_matrix[act_a][act_b] = "#"
+
+    start_events = set()
+    end_events = set()
+    if workflow_log:
+        start_events = {trace[0] for trace in workflow_log if trace}
+        end_events = {trace[-1] for trace in workflow_log if trace}
+
+    formal_start_events = all_activities.copy()
+    formal_end_events = all_activities.copy()
+    for act_a in all_activities:
+        for act_b in all_activities:
+            if act_a == act_b: continue
+            if footprint_matrix[act_b][act_a] in ["->", "||"]:
+                formal_start_events.discard(act_a)
+            if footprint_matrix[act_a][act_b] in ["->", "||"]:
+                formal_end_events.discard(act_a)
+
+    start_set_events = formal_start_events
+    end_set_events = formal_end_events
+
+    inv_causality = defaultdict(set)
+    for source, targets in causality.items():
+        for target in targets:
+            inv_causality[target].add(source)
+
+    print("Relacje Alpha obliczone.")
+
+    return causality, parallel, start_set_events, end_set_events, inv_causality
+
+class MyGraph(graphviz.Digraph):
+    def __init__(self, *args, **kwargs):
+        super(MyGraph, self).__init__(*args, **kwargs)
+        self.graph_attr['rankdir'] = 'LR'
+        self.node_attr['shape'] = 'box'
+        self.node_attr['style'] = 'rounded'
+        self.graph_attr['nodesep'] = '0.6'
+        self.edge_attr.update(penwidth='1.5')
+        self._gateway_count = 0
+
+    def _unique_gateway_name(self, prefix, hint=""):
+        self._gateway_count += 1
+        return f"{prefix}_{self._gateway_count}_{hint}"
+
+    def add_activity(self, name, **kwargs):
+        merged_attrs = {'shape': 'box', 'style': 'rounded,filled', 'fillcolor': '#FFFFCC'}
+        merged_attrs.update(kwargs)
+        super(MyGraph, self).node(name, **merged_attrs)
+
+    def add_event(self, name, **kwargs):
+        merged_attrs = {'shape': 'circle', 'label': '', 'width': '0.3', 'fixedsize': 'true'}
+        if 'start' in name.lower():
+            merged_attrs.update({'fillcolor': '#90EE90', 'style': 'filled'})
+        elif 'end' in name.lower():
+            merged_attrs.update({'shape': 'doublecircle', 'fillcolor': '#FFB6C1', 'style': 'filled'})
+        merged_attrs.update(kwargs)
+        super(MyGraph, self).node(name, **merged_attrs)
+
+    def add_gateway(self, name, label, **kwargs):
+        merged_attrs = {
+            'shape': 'diamond',
+            'width': '.5', 'height': '.5',
+            'fixedsize': 'true',
+            'fontsize': '20',
+            'label': label,
+            'style': 'filled',
+            'fillcolor': '#E0E0E0'
+            }
+        merged_attrs.update(kwargs)
+        super(MyGraph, self).node(name, **merged_attrs)
+
+    def add_and_gateway(self, name, **kwargs):
+        self.add_gateway(name, '+', **kwargs)
+
+    def add_xor_gateway(self, name, **kwargs):
+        self.add_gateway(name, '×', **kwargs)
+
+    def add_split_gateway(self, source, targets, gateway_type, parallel_rel, *args):
+        hint = f"{source}->{'_'.join(sorted(list(targets)))}"
+        is_parallel_split = False
+
+        if len(targets) > 1:
+            target_list = sorted(list(targets))
+            is_parallel_split = any((t1, t2) in parallel_rel for i, t1 in enumerate(target_list) for t2 in target_list[i+1:])
+
+        gateway_name = self._unique_gateway_name(f"{gateway_type}s", hint)
+
+        if gateway_type == "AND" or (gateway_type == "AUTO" and is_parallel_split):
+            self.add_and_gateway(gateway_name, *args)
+        else:
+            self.add_xor_gateway(gateway_name, *args)
+
+        super(MyGraph, self).edge(source, gateway_name)
+        for target in targets:
+            super(MyGraph, self).edge(gateway_name, target)
+        return gateway_name
+
+    def add_merge_gateway(self, sources, target, gateway_type, parallel_rel, *args):
+        hint = f"{'_'.join(sorted(list(sources)))}->{target}"
+        is_parallel_merge = False
+        if len(sources) > 1:
+            source_list = sorted(list(sources))
+            is_parallel_merge = any((s1, s2) in parallel_rel for i, s1 in enumerate(source_list) for s2 in source_list[i+1:])
+
+        gateway_name = self._unique_gateway_name(f"{gateway_type}m", hint)
+
+        if gateway_type == "AND" or (gateway_type == "AUTO" and is_parallel_merge):
+            self.add_and_gateway(gateway_name, *args)
+        else:
+            self.add_xor_gateway(gateway_name, *args)
+
+        super(MyGraph, self).edge(gateway_name, target)
+        for source in sources:
+            super(MyGraph, self).edge(source, gateway_name)
+        return gateway_name
+
+
+def generate_bpmn_graph(causality, parallel, start_events, end_events, inv_causality, all_activities, filename_base):
+    G = MyGraph(comment='Alpha Miner BPMN')
+
+    processed_sources_for_split = set()
+    processed_targets_for_merge = set()
+    edges_to_add = set()
+
+    for activity in all_activities:
+        G.add_activity(activity)
+
+    for source, targets in causality.items():
+        if len(targets) > 1:
+            G.add_split_gateway(source, targets, "AUTO", parallel)
+            processed_sources_for_split.add(source)
+        elif len(targets) == 1:
+            target = list(targets)[0]
+            edges_to_add.add((source, target))
+
+    for target, sources in inv_causality.items():
+        if len(sources) > 1:
+            G.add_merge_gateway(sources, target, "AUTO", parallel)
+            processed_targets_for_merge.add(target)
+            for source in sources:
+                edges_to_add.discard((source, target))
+
+    for source, target in edges_to_add:
+        G.edge(source, target)
+
+    G.add_event("start")
+    if len(start_events) > 1:
+        G.add_split_gateway("start", start_events, "AUTO", parallel)
+    elif len(start_events) == 1:
+        G.edge("start", list(start_events)[0])
+
+    G.add_event("end")
+    if len(end_events) > 1:
+        G.add_merge_gateway(end_events, "end", "AUTO", parallel)
+    elif len(end_events) == 1:
+        G.edge(list(end_events)[0], "end")
+
+    try:
+        output_filename_dot = f"{filename_base}.gv"
+        output_filename_png = f"{filename_base}.png"
+        G.render(output_filename_dot, view=False, format='png', outfile=output_filename_png)
+        print(f"Graf BPMN (Alpha) zapisany jako '{output_filename_png}' i '{output_filename_dot}'")
+        return G
+    except Exception as e:
+        print(f"Błąd podczas renderowania grafu BPMN Graphviz: {e}")
+        print("Upewnij się, że Graphviz jest zainstalowany i dostępny w ścieżce systemowej (PATH).")
+        return None
 
 if __name__ == "__main__":
-    if WYBRANA_METODA == 'heuristic':
+    if MINER_TYPE == 'heuristic':
         print("\n--- Generowanie Grafu Heurystycznego ---")
-        generuj_graf_heurystyczny(
-            licznik_aktywnosci,
-            licznik_przejsc,
-            relacje_sukcesji,
-            PROG_CZESTOSCI_AKTYWNOSCI,
-            PROG_CZESTOSCI_PRZEJSC,
-            NAZWA_PLIKU_HEURYSTYKA
+        print(f"Próg częstotliwości aktywności: {ACTIVITY_FREQUENCY_THRESHOLD}")
+        print(f"Próg częstotliwości przejść: {TRANSITION_FREQUENCY_THRESHOLD}")
+        heuristic_graph = generate_heuristic_graph(
+            activity_counter,
+            transition_counter,
+            direct_succession_rel,
+            ACTIVITY_FREQUENCY_THRESHOLD,
+            TRANSITION_FREQUENCY_THRESHOLD,
+            OUTPUT_HEURISTIC_BASE
         )
-    elif WYBRANA_METODA == 'alpha':
-        print("\n--- Generowanie Grafu Algorytmu Alpha ---")
-        przyczynowosc, rownoleglosc, start_events, end_events, inv_causality = oblicz_relacje_alpha(
-            dziennik_przeplywu,
-            wszystkie_aktywnosci
+
+    elif MINER_TYPE == 'alpha':
+        print("\n--- Generowanie Grafu Algorytu Alpha ---")
+        causality, parallel, start_events, end_events, inv_causality = calculate_alpha_relations(
+            workflow_log,
+            all_activities
         )
-        generuj_graf_bpmn(
-            przyczynowosc,
-            rownoleglosc,
+        bpmn_graph = generate_bpmn_graph(
+            causality,
+            parallel,
             start_events,
             end_events,
             inv_causality,
-            wszystkie_aktywnosci,
-            NAZWA_PLIKU_BPMN
+            all_activities,
+            OUTPUT_BPMN_BASE
         )
+
+    else:
+        print(f"Nieznany typ minera: '{MINER_TYPE}'. Wybierz 'heuristic' lub 'alpha'.")
+
     print("\n--- Zakończono ---")

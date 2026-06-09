@@ -3,46 +3,46 @@ digraph {
 	graph [nodesep=0.6 rankdir=LR]
 	node [shape=box style=rounded]
 	edge [penwidth=1.5]
-	TestRepair [fillcolor="#FFFF55" shape=box style="rounded,filled"]
-	AnalyzeDefect [fillcolor="#FFFF55" shape=box style="rounded,filled"]
-	RepairComplex [fillcolor="#FFFF55" shape=box style="rounded,filled"]
-	ArchiveRepair [fillcolor="#FFFF55" shape=box style="rounded,filled"]
-	Register [fillcolor="#FFFF55" shape=box style="rounded,filled"]
-	RestartRepair [fillcolor="#FFFF55" shape=box style="rounded,filled"]
-	InformUser [fillcolor="#FFFF55" shape=box style="rounded,filled"]
-	RepairSimple [fillcolor="#FFFF55" shape=box style="rounded,filled"]
+	RepairComplex [fillcolor="#FFFFCC" shape=box style="rounded,filled"]
+	ArchiveRepair [fillcolor="#FFFFCC" shape=box style="rounded,filled"]
+	TestRepair [fillcolor="#FFFFCC" shape=box style="rounded,filled"]
+	Register [fillcolor="#FFFFCC" shape=box style="rounded,filled"]
+	RepairSimple [fillcolor="#FFFFCC" shape=box style="rounded,filled"]
+	RestartRepair [fillcolor="#FFFFCC" shape=box style="rounded,filled"]
+	InformUser [fillcolor="#FFFFCC" shape=box style="rounded,filled"]
+	AnalyzeDefect [fillcolor="#FFFFCC" shape=box style="rounded,filled"]
 	"AUTOs_1_AnalyzeDefect->InformUser_RepairComplex_RepairSimple" [label="+" fillcolor="#E0E0E0" fixedsize=true fontsize=20 height=.5 shape=diamond style=filled width=.5]
 	AnalyzeDefect -> "AUTOs_1_AnalyzeDefect->InformUser_RepairComplex_RepairSimple"
-	"AUTOs_1_AnalyzeDefect->InformUser_RepairComplex_RepairSimple" -> InformUser
 	"AUTOs_1_AnalyzeDefect->InformUser_RepairComplex_RepairSimple" -> RepairComplex
 	"AUTOs_1_AnalyzeDefect->InformUser_RepairComplex_RepairSimple" -> RepairSimple
+	"AUTOs_1_AnalyzeDefect->InformUser_RepairComplex_RepairSimple" -> InformUser
 	"AUTOs_2_RestartRepair->RepairComplex_RepairSimple" [label="×" fillcolor="#E0E0E0" fixedsize=true fontsize=20 height=.5 shape=diamond style=filled width=.5]
 	RestartRepair -> "AUTOs_2_RestartRepair->RepairComplex_RepairSimple"
 	"AUTOs_2_RestartRepair->RepairComplex_RepairSimple" -> RepairComplex
 	"AUTOs_2_RestartRepair->RepairComplex_RepairSimple" -> RepairSimple
 	"AUTOs_3_TestRepair->ArchiveRepair_RestartRepair" [label="×" fillcolor="#E0E0E0" fixedsize=true fontsize=20 height=.5 shape=diamond style=filled width=.5]
 	TestRepair -> "AUTOs_3_TestRepair->ArchiveRepair_RestartRepair"
-	"AUTOs_3_TestRepair->ArchiveRepair_RestartRepair" -> RestartRepair
 	"AUTOs_3_TestRepair->ArchiveRepair_RestartRepair" -> ArchiveRepair
+	"AUTOs_3_TestRepair->ArchiveRepair_RestartRepair" -> RestartRepair
 	"AUTOm_4_AnalyzeDefect_RestartRepair->RepairComplex" [label="×" fillcolor="#E0E0E0" fixedsize=true fontsize=20 height=.5 shape=diamond style=filled width=.5]
 	"AUTOm_4_AnalyzeDefect_RestartRepair->RepairComplex" -> RepairComplex
-	RestartRepair -> "AUTOm_4_AnalyzeDefect_RestartRepair->RepairComplex"
 	AnalyzeDefect -> "AUTOm_4_AnalyzeDefect_RestartRepair->RepairComplex"
+	RestartRepair -> "AUTOm_4_AnalyzeDefect_RestartRepair->RepairComplex"
 	"AUTOm_5_AnalyzeDefect_RestartRepair->RepairSimple" [label="×" fillcolor="#E0E0E0" fixedsize=true fontsize=20 height=.5 shape=diamond style=filled width=.5]
 	"AUTOm_5_AnalyzeDefect_RestartRepair->RepairSimple" -> RepairSimple
-	RestartRepair -> "AUTOm_5_AnalyzeDefect_RestartRepair->RepairSimple"
 	AnalyzeDefect -> "AUTOm_5_AnalyzeDefect_RestartRepair->RepairSimple"
+	RestartRepair -> "AUTOm_5_AnalyzeDefect_RestartRepair->RepairSimple"
 	"AUTOm_6_InformUser_TestRepair->ArchiveRepair" [label="+" fillcolor="#E0E0E0" fixedsize=true fontsize=20 height=.5 shape=diamond style=filled width=.5]
 	"AUTOm_6_InformUser_TestRepair->ArchiveRepair" -> ArchiveRepair
-	TestRepair -> "AUTOm_6_InformUser_TestRepair->ArchiveRepair"
 	InformUser -> "AUTOm_6_InformUser_TestRepair->ArchiveRepair"
+	TestRepair -> "AUTOm_6_InformUser_TestRepair->ArchiveRepair"
 	"AUTOm_7_RepairComplex_RepairSimple->TestRepair" [label="×" fillcolor="#E0E0E0" fixedsize=true fontsize=20 height=.5 shape=diamond style=filled width=.5]
 	"AUTOm_7_RepairComplex_RepairSimple->TestRepair" -> TestRepair
 	RepairComplex -> "AUTOm_7_RepairComplex_RepairSimple->TestRepair"
 	RepairSimple -> "AUTOm_7_RepairComplex_RepairSimple->TestRepair"
 	Register -> AnalyzeDefect
-	start [label="" fillcolor="#51E851" fixedsize=true shape=circle style=filled width=0.3]
+	start [label="" fillcolor="#90EE90" fixedsize=true shape=circle style=filled width=0.3]
 	start -> Register
-	end [label="" fillcolor="#F44862" fixedsize=true shape=doublecircle style=filled width=0.3]
+	end [label="" fillcolor="#FFB6C1" fixedsize=true shape=doublecircle style=filled width=0.3]
 	ArchiveRepair -> end
 }
