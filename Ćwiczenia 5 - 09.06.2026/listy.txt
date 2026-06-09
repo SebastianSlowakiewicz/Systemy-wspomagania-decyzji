@@ -1,0 +1,207 @@
+%% Sekcja 1
+
+porownaj([_, _, Elem, Elem | _]).
+
+zamien([A, B, C, D | Reszta], [A, B, D, C | Reszta]).
+
+%% Sekcja 2
+
+nalezy(X, [X|_]).
+nalezy(X, [_|Ogon]) :-
+    nalezy(X, Ogon).
+
+%% Sekcja 3
+
+dlugosc([], 0).
+dlugosc([_|Ogon], Dlug) :-
+    dlugosc(Ogon, X),
+    Dlug is X + 1.
+
+%% Sekcja 4
+
+a2b([], []).
+a2b([a|Ta], [b|Tb]) :-
+    a2b(Ta, Tb).
+
+%% Sekcja 5
+
+sklej([], X, X).
+sklej([X|L1], L2, [X|L3]) :-
+    sklej(L1, L2, L3).
+
+nalezy1(X, L) :-
+    sklej(_, [X|_], L).
+
+
+ostatni_sklej(E, L) :-
+    sklej(_, [E], L). % Działa dla list niepustych.
+
+ostatni(X, [X]).
+ostatni(X, [_|T]) :-
+    ostatni(X, T).
+
+%% Sekcja 6
+
+% Cel: Dodaje element X na początek listy L, tworząc nową listę [X|L].
+dodaj(X, L, [X|L]). % Rzadko definiowane, używa się [X|L].
+
+%% Sekcja 7
+
+usun(X, [X|Reszta], Reszta).
+usun(X, [Y|Ogon], [Y|Reszta]) :-
+    % X \= Y, % Można dodać dla jednoznaczności, ale nie jest konieczne
+    usun(X, Ogon, Reszta).
+
+
+wstaw(X, L, Duza) :-
+    usun(X, Duza, L).
+
+
+nalezy2(X, L) :-
+    usun(X, L, _).
+
+%% Sekcja 8
+
+
+zawiera(S, L) :-
+    sklej(_, L2, L),
+    sklej(S, _, L2).
+
+%% Sekcja 9
+
+
+permutacja([], []).
+permutacja([X|L], P) :-
+    permutacja(L, L1),
+    wstaw(X, L1, P).
+
+
+permutacja2([], []).
+permutacja2(L, [X|P]) :-
+    usun(X, L, L1),
+    permutacja2(L1, P).
+
+%% Sekcja 10
+
+odwroc([], []).
+odwroc([H|T], L) :-
+    odwroc(T, R),
+    sklej(R, [H], L).
+
+%% Sekcja 11
+
+
+wypisz([]).
+wypisz([H|T]) :-
+    put_code(H),
+    wypisz(T).
+
+plural(Noun, PL) :-
+    name(Noun, L),
+    name(s, Suffix),   % Suffix = [115]
+    append(L, Suffix, NL), % Używamy wbudowanego append/3
+    name(PL, NL).
+
+
+odwroc2(L, R) :-
+    odwr2(L, [], R).
+
+odwr2([], A, A).
+odwr2([H|T], A, R) :-
+    odwr2(T, [H|A], R).
+
+%% Sekcja 12
+
+sklej_roznicowo_1(L - End, ListToAdd, L) :-
+    End = ListToAdd.
+
+sklej_roznicowo_2(L1 - End1, End1 - End2, L1 - End2).
+
+splaszcz_dr(X, L-End) :- splaszcz_dr_acc(X, L, End).
+
+splaszcz_dr_acc(Var, _, _) :- var(Var), !, fail. % Nie spłaszczamy zmiennych
+splaszcz_dr_acc([], L, L) :- !. % Pusta lista -> pusta lista różnicowa
+splaszcz_dr_acc([H|T], L, End) :- !, % Wejście jest listą
+    splaszcz_dr_acc(H, L, Mid),    % Spłaszcz głowę (wynik L-Mid)
+    splaszcz_dr_acc(T, Mid, End).  % Spłaszcz ogon (dołączając do Mid, wynik Mid-End)
+splaszcz_dr_acc(X, [X|End], End). % Element niebędący listą
+
+%% Sekcja 14
+
+% 1.
+% Wymaga: sklej/3
+usun_3_ostatnie(L, L1) :-
+    sklej(L1, [_, _, _], L).
+
+% 2. 
+usun_3_pierwsze(L, L1) :-
+    L = [_, _, _ | L1].
+
+% 3. 
+% Wymaga: sklej/3
+usun_3_pocz_i_konc(L, L2) :-
+    L = [_, _, _ | Reszta],
+    sklej(L2, [_, _, _], Reszta).
+
+% 4. 
+parzysta([]).
+parzysta([_,_|T]) :- parzysta(T).
+
+nieparzysta([_]).
+nieparzysta([_,_|T]) :- nieparzysta(T).
+
+% 5.
+palindrom(L) :-
+    odwroc2(L, L).
+
+% 6. 
+przesun([], []).
+przesun([H|T], L2) :-
+    append(T, [H], L2).
+
+% 7. 
+znaczy(0,zero).  znaczy(1,jeden). znaczy(2,dwa).   znaczy(3,trzy).
+znaczy(4,cztery). znaczy(5,piec).  znaczy(6,szesc).  znaczy(7,siedem).
+znaczy(8,osiem). znaczy(9,dziewiec).
+
+przeloz([], []).
+przeloz([Cyfra|ResztaCyfr], [Slowo|ResztaSlow]) :-
+    znaczy(Cyfra, Slowo),
+    przeloz(ResztaCyfr, ResztaSlow).
+
+% 8. 
+podzbior([], []).
+podzbior([H|T], [H|SubT]) :- podzbior(T, SubT).
+podzbior([_|T], SubT) :- podzbior(T, SubT).
+
+% 9.
+podziel([], [], []).
+podziel([X], [X], []).
+podziel([X,Y|T], [X|L1], [Y|L2]) :-
+    podziel(T, L1, L2).
+
+% 10.
+% Wymaga: append/3 (wbudowany)
+splaszcz([], []).
+splaszcz([H|T], Wynik) :- !,
+    splaszcz(H, SplaszczonaH),
+    splaszcz(T, SplaszczonyT),
+    append(SplaszczonaH, SplaszczonyT, Wynik).
+splaszcz(X, [X]) :-
+    X \= [], % nie pusta lista
+    \+ is_list(X). % nie lista (w SWI-Prolog)
+
+% 11. 
+moneta(5).
+moneta(2).
+moneta(1).
+
+rozmien(0, []).
+rozmien(Kwota, [M|ResztaMonet]) :-
+    Kwota > 0,
+    moneta(M),
+    PozostalaKwota is Kwota - M,
+    PozostalaKwota >= 0,
+    rozmien(PozostalaKwota, ResztaMonet),
+    % Opcjonalnie - wymuszenie porządku malejącego dla unikalności rozwiązań
+    ( ResztaMonet = [] ; ResztaMonet = [KolejnaM|_], M >= KolejnaM ).
